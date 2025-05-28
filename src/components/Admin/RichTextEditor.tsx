@@ -268,7 +268,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           onInput={handleInput}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          className="min-h-[300px] p-4 outline-none"
+          className="min-h-[300px] p-4 outline-none rich-text-editor"
           style={{
             lineHeight: '1.6',
             fontSize: '14px'
@@ -283,14 +283,14 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </p>
       )}
       
-      <style jsx>{`
-        [contenteditable]:empty:before {
+      <style>{`
+        .rich-text-editor:empty:before {
           content: attr(data-placeholder);
           color: #9ca3af;
           pointer-events: none;
         }
         
-        [contenteditable] img {
+        .rich-text-editor img {
           max-width: 100%;
           height: auto;
           margin: 8px 0;
@@ -298,21 +298,21 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           position: relative;
         }
         
-        [contenteditable] img[src^="blob:"] {
+        .rich-text-editor img[src^="blob:"] {
           border: 2px solid #10b981;
           box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.2);
         }
         
-        [contenteditable] ul, [contenteditable] ol {
+        .rich-text-editor ul, .rich-text-editor ol {
           margin: 12px 0;
           padding-left: 24px;
         }
         
-        [contenteditable] p {
+        .rich-text-editor p {
           margin: 8px 0;
         }
         
-        [contenteditable] a {
+        .rich-text-editor a {
           color: #3b82f6;
           text-decoration: underline;
         }
