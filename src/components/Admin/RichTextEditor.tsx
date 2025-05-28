@@ -12,7 +12,9 @@ import {
   Image,
   AlignLeft,
   AlignCenter,
-  AlignRight
+  AlignRight,
+  Minus,
+  RotateCcw
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { apiClient } from '@/utils/api';
@@ -32,11 +34,13 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
 
   // Sincronizar valor inicial
   useEffect(() => {
     if (editorRef.current && value !== editorRef.current.innerHTML) {
       editorRef.current.innerHTML = value || '';
+      setupImageHandlers();
     }
   }, [value]);
 
@@ -53,30 +57,82 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     handleInput();
   };
 
+  const setupImageHandlers = () => {
+    if (!editorRef.current) return;
+    
+    const images = editorRef.current.querySelectorAll('img');
+    images.forEach(img => {
+      // Remove handlers antigos
+      img.removeEventListener('click', handleImageClick);
+      img.removeEventListener('load', setupImageResize);
+      
+      // Adiciona novos handlers
+      img.addEventListener('click', handleImageClick);
+      img.addEventListener('load', setupImageResize);
+      
+      // Torna a imagem redimensionável
+      img.style.cursor = 'pointer';
+      img.setAttribute('data-resizable', 'true');
+    });
+  };
+
+  const handleImageClick = (e: Event) => {
+    const img = e.target as HTMLImageElement;
+    setSelectedImage(img);
+    
+    // Remove seleção de outras imagens
+    if (editorRef.current) {
+      const allImages = editorRef.current.querySelectorAll('img');
+      allImages.forEach(i => i.classList.remove('image-selected'));
+    }
+    
+    // Adiciona classe de seleção
+    img.classList.add('image-selected');
+  };
+
+  const setupImageResize = (e: Event) => {
+    const img = e.target as HTMLImageElement;
+    
+    // Configura propriedades básicas
+    img.style.maxWidth = '100%';
+    img.style.height = 'auto';
+    img.style.display = 'block';
+    img.style.margin = '8px auto';
+    img.style.borderRadius = '4px';
+    img.style.transition = 'all 0.2s ease';
+    
+    // Adiciona atributos para redimensionamento
+    img.setAttribute('draggable', 'false');
+    img.setAttribute('contenteditable', 'false');
+  };
+
   const insertImageAtCursor = (imageUrl: string) => {
     if (editorRef.current) {
-      // Focus the editor first
       editorRef.current.focus();
       
-      // Get current selection
       const selection = window.getSelection();
       const range = selection?.getRangeAt(0);
       
       if (range) {
-        // Create image element
         const img = document.createElement('img');
         img.src = imageUrl;
-        img.style.maxWidth = '100%';
+        img.style.maxWidth = '300px';
         img.style.height = 'auto';
-        img.style.margin = '8px 0';
+        img.style.margin = '8px';
         img.style.borderRadius = '4px';
-        img.style.display = 'block';
+        img.style.display = 'inline-block';
+        img.style.cursor = 'pointer';
+        img.setAttribute('data-resizable', 'true');
+        img.setAttribute('draggable', 'false');
+        img.setAttribute('contenteditable', 'false');
         
-        // Insert image at cursor position
         range.deleteContents();
         range.insertNode(img);
         
-        // Move cursor after image
+        // Adiciona handlers para a nova imagem
+        img.addEventListener('click', handleImageClick);
+        img.addEventListener('load', setupImageResize);
+        
         range.setStartAfter(img);
         range.setEndAfter(img);
         selection?.removeAllRanges();
@@ -84,16 +140,23 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
         
         console.log('Image inserted at cursor:', imageUrl);
       } else {
-        // Fallback: append to end
         editorRef.current.appendChild(document.createElement('br'));
         const img = document.createElement('img');
         img.src = imageUrl;
-        img.style.maxWidth = '100%';
+        img.style.maxWidth = '300px';
         img.style.height = 'auto';
-        img.style.margin = '8px 0';
+        img.style.margin = '8px';
         img.style.borderRadius = '4px';
         img.style.display = 'block';
+        img.style.cursor = 'pointer';
+        img.setAttribute('data-resizable', 'true');
+        img.setAttribute('draggable', 'false');
+        img.setAttribute('contenteditable', 'false');
+        
         editorRef.current.appendChild(img);
+        
+        img.addEventListener('click', handleImageClick);
+        img.addEventListener('load', setupImageResize);
         
         console.log('Image appended to editor:', imageUrl);
       }
@@ -111,21 +174,16 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
         try {
-          // Create blob URL for immediate preview
           const blobUrl = URL.createObjectURL(file);
           
           console.log('Inserting image with blob URL:', blobUrl);
-          
-          // Insert image with blob URL immediately for instant preview
           insertImageAtCursor(blobUrl);
           
-          // Show loading toast
           toast({
             title: 'Enviando imagem...',
             description: 'Por favor, aguarde.',
           });
 
-          // Upload to server in background
           const formData = new FormData();
           formData.append('image', file);
 
@@ -143,15 +201,14 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
             
             console.log('Upload successful, replacing blob URL with server URL:', serverUrl);
             
-            // Replace blob URL with server URL in editor content
             if (editorRef.current) {
               const content = editorRef.current.innerHTML;
               const updatedContent = content.replace(blobUrl, serverUrl);
               editorRef.current.innerHTML = updatedContent;
               onChange(updatedContent);
+              setupImageHandlers();
             }
             
-            // Clean up blob URL
             URL.revokeObjectURL(blobUrl);
             
             toast({
@@ -159,7 +216,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
               description: 'A imagem foi inserida no editor.',
             });
           } else {
-            // If upload fails, remove the image from editor
             if (editorRef.current) {
               const images = editorRef.current.querySelectorAll(`img[src="${blobUrl}"]`);
               images.forEach(img => img.remove());
@@ -189,11 +245,86 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
+  const insertHorizontalRule = () => {
+    executeCommand('insertHorizontalRule');
+    handleInput();
+  };
+
+  const insertLineBreak = () => {
+    executeCommand('insertHTML', '<br><br>');
+    handleInput();
+  };
+
+  // Funções para controlar imagens selecionadas
+  const resizeSelectedImage = (size: 'small' | 'medium' | 'large' | 'full') => {
+    if (!selectedImage) return;
+    
+    const sizes = {
+      small: '150px',
+      medium: '300px', 
+      large: '500px',
+      full: '100%'
+    };
+    
+    selectedImage.style.maxWidth = sizes[size];
+    selectedImage.style.width = sizes[size];
+    handleInput();
+  };
+
+  const alignSelectedImage = (alignment: 'left' | 'center' | 'right') => {
+    if (!selectedImage) return;
+    
+    switch (alignment) {
+      case 'left':
+        selectedImage.style.float = 'left';
+        selectedImage.style.margin = '8px 16px 8px 0';
+        selectedImage.style.display = 'block';
+        break;
+      case 'right':
+        selectedImage.style.float = 'right';
+        selectedImage.style.margin = '8px 0 8px 16px';
+        selectedImage.style.display = 'block';
+        break;
+      case 'center':
+        selectedImage.style.float = 'none';
+        selectedImage.style.margin = '8px auto';
+        selectedImage.style.display = 'block';
+        break;
+    }
+    
+    handleInput();
+  };
+
+  const clearImageFloat = () => {
+    if (!selectedImage) return;
+    
+    selectedImage.style.float = 'none';
+    selectedImage.style.margin = '8px auto';
+    selectedImage.style.display = 'block';
+    handleInput();
+  };
+
+  // Detecta mudanças no editor para configurar handlers
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setupImageHandlers();
+    });
+
+    if (editorRef.current) {
+      observer.observe(editorRef.current, {
+        childList: true,
+        subtree: true
+      });
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="space-y-2">
       <Label htmlFor="content-editor">{label} *</Label>
       
-      {/* Toolbar */}
+      {/* Toolbar Principal */}
       <div className="flex flex-wrap gap-1 p-2 border border-gray-300 rounded-t-md bg-gray-50">
         <Button
           type="button"
@@ -300,7 +431,124 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
         >
           <Image className="h-4 w-4" />
         </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={insertHorizontalRule}
+          className="h-8 w-8 p-0"
+          title="Inserir linha separadora"
+        >
+          <Minus className="h-4 w-4" />
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={insertLineBreak}
+          className="h-8 w-8 p-0"
+          title="Inserir quebra de linha"
+        >
+          ↵
+        </Button>
       </div>
+
+      {/* Toolbar de Imagem (aparece quando uma imagem é selecionada) */}
+      {selectedImage && (
+        <div className="flex flex-wrap gap-1 p-2 border border-blue-300 rounded bg-blue-50">
+          <span className="text-sm text-blue-700 font-medium mr-2">Imagem selecionada:</span>
+          
+          <div className="flex gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => resizeSelectedImage('small')}
+              className="h-8 px-2 text-xs"
+            >
+              Pequena
+            </Button>
+            
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => resizeSelectedImage('medium')}
+              className="h-8 px-2 text-xs"
+            >
+              Média
+            </Button>
+            
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => resizeSelectedImage('large')}
+              className="h-8 px-2 text-xs"
+            >
+              Grande
+            </Button>
+            
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => resizeSelectedImage('full')}
+              className="h-8 px-2 text-xs"
+            >
+              Completa
+            </Button>
+          </div>
+
+          <div className="w-px h-6 bg-blue-300 mx-1" />
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => alignSelectedImage('left')}
+            className="h-8 w-8 p-0"
+            title="Flutuar à esquerda"
+          >
+            <AlignLeft className="h-4 w-4" />
+          </Button>
+          
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => alignSelectedImage('center')}
+            className="h-8 w-8 p-0"
+            title="Centralizar"
+          >
+            <AlignCenter className="h-4 w-4" />
+          </Button>
+          
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => alignSelectedImage('right')}
+            className="h-8 w-8 p-0"
+            title="Flutuar à direita"
+          >
+            <AlignRight className="h-4 w-4" />
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={clearImageFloat}
+            className="h-8 w-8 p-0"
+            title="Limpar flutuação"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
       
       {/* Editor */}
       <div 
@@ -312,6 +560,16 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           onInput={handleInput}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
+          onClick={(e) => {
+            // Remove seleção de imagem se clicar fora
+            if (e.target === editorRef.current) {
+              setSelectedImage(null);
+              if (editorRef.current) {
+                const allImages = editorRef.current.querySelectorAll('img');
+                allImages.forEach(i => i.classList.remove('image-selected'));
+              }
+            }
+          }}
           className="min-h-[300px] p-4 outline-none rich-text-editor"
           style={{
             lineHeight: '1.6',
@@ -337,9 +595,18 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
         .rich-text-editor img {
           max-width: 100%;
           height: auto;
-          margin: 8px 0;
+          margin: 8px;
           border-radius: 4px;
-          display: block;
+          transition: all 0.2s ease;
+        }
+        
+        .rich-text-editor img:hover {
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .rich-text-editor img.image-selected {
+          border: 2px solid #3b82f6;
+          box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
         }
         
         .rich-text-editor img[src^="blob:"] {
@@ -359,6 +626,20 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
         .rich-text-editor a {
           color: #3b82f6;
           text-decoration: underline;
+        }
+        
+        .rich-text-editor hr {
+          margin: 16px 0;
+          border: none;
+          height: 1px;
+          background-color: #e5e7eb;
+        }
+        
+        /* Clearfix para elementos flutuantes */
+        .rich-text-editor::after {
+          content: "";
+          display: table;
+          clear: both;
         }
       `}</style>
     </div>
