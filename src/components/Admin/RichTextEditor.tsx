@@ -32,6 +32,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState<Map<string, string>>(new Map());
 
   // Sincronizar valor inicial
   useEffect(() => {
@@ -42,7 +43,13 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   const handleInput = () => {
     if (editorRef.current) {
-      const content = editorRef.current.innerHTML;
+      let content = editorRef.current.innerHTML;
+      
+      // Replace blob URLs with server URLs for saving
+      uploadedImages.forEach((serverUrl, blobUrl) => {
+        content = content.replace(new RegExp(blobUrl, 'g'), serverUrl);
+      });
+      
       onChange(content);
     }
   };
@@ -62,6 +69,19 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
         try {
+          // Create blob URL for immediate preview
+          const blobUrl = URL.createObjectURL(file);
+          
+          // Insert image with blob URL immediately
+          executeCommand('insertImage', blobUrl);
+          
+          // Show loading toast
+          const loadingToast = toast({
+            title: 'Enviando imagem...',
+            description: 'Por favor, aguarde.',
+          });
+
+          // Upload to server
           const formData = new FormData();
           formData.append('image', file);
 
@@ -75,13 +95,22 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
           if (response.ok) {
             const data = await response.json();
-            const imageUrl = `${apiClient.baseURL}${data.url}`;
-            executeCommand('insertImage', imageUrl);
+            const serverUrl = `${apiClient.baseURL}${data.url}`;
+            
+            // Store mapping for later replacement
+            setUploadedImages(prev => new Map(prev.set(blobUrl, serverUrl)));
+            
             toast({
               title: 'Imagem enviada com sucesso!',
               description: 'A imagem foi inserida no editor.',
             });
           } else {
+            // If upload fails, remove the image from editor
+            if (editorRef.current) {
+              const images = editorRef.current.querySelectorAll(`img[src="${blobUrl}"]`);
+              images.forEach(img => img.remove());
+            }
+            URL.revokeObjectURL(blobUrl);
             throw new Error('Falha no upload');
           }
         } catch (error) {
@@ -104,6 +133,17 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       executeCommand('createLink', url);
     }
   };
+
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      uploadedImages.forEach((_, blobUrl) => {
+        if (blobUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(blobUrl);
+        }
+      });
+    };
+  }, [uploadedImages]);
 
   return (
     <div className="space-y-2">
@@ -255,6 +295,12 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           height: auto;
           margin: 8px 0;
           border-radius: 4px;
+          position: relative;
+        }
+        
+        [contenteditable] img[src^="blob:"] {
+          border: 2px solid #10b981;
+          box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.2);
         }
         
         [contenteditable] ul, [contenteditable] ol {

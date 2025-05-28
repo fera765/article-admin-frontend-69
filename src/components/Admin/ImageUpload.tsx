@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,10 +16,25 @@ interface ImageUploadProps {
 const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Imagem" }) => {
   const [uploading, setUploading] = useState(false);
   const [urlInput, setUrlInput] = useState(value);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [serverUrl, setServerUrl] = useState<string>('');
+
+  // Initialize preview with existing value
+  useEffect(() => {
+    if (value) {
+      setPreviewUrl(value);
+      setServerUrl(value);
+      setUrlInput(value);
+    }
+  }, [value]);
 
   const onDrop = async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
+      // Create blob URL for immediate preview
+      const blobUrl = URL.createObjectURL(file);
+      setPreviewUrl(blobUrl);
+      
       setUploading(true);
       try {
         const formData = new FormData();
@@ -36,17 +50,28 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
 
         if (response.ok) {
           const data = await response.json();
-          onChange(data.url);
-          setUrlInput(data.url);
+          const fullServerUrl = `${apiClient.baseURL}${data.url}`;
+          
+          // Store server URL but keep blob URL for preview
+          setServerUrl(fullServerUrl);
+          setUrlInput(fullServerUrl);
+          onChange(fullServerUrl);
+          
           toast({
             title: 'Upload concluído!',
             description: 'A imagem foi enviada com sucesso.',
           });
         } else {
+          // If upload fails, remove blob URL
+          URL.revokeObjectURL(blobUrl);
+          setPreviewUrl('');
           throw new Error('Falha no upload');
         }
       } catch (error) {
         console.error('Error uploading image:', error);
+        // If upload fails, remove blob URL
+        URL.revokeObjectURL(blobUrl);
+        setPreviewUrl('');
         toast({
           title: 'Erro no upload',
           description: 'Tente novamente.',
@@ -68,13 +93,31 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
 
   const handleUrlChange = (url: string) => {
     setUrlInput(url);
+    setPreviewUrl(url);
+    setServerUrl(url);
     onChange(url);
   };
 
   const clearImage = () => {
+    // Revoke blob URL if it exists
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    
     onChange('');
     setUrlInput('');
+    setPreviewUrl('');
+    setServerUrl('');
   };
+
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   return (
     <div className="space-y-4">
@@ -87,7 +130,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
           value={urlInput}
           onChange={(e) => handleUrlChange(e.target.value)}
         />
-        {value && (
+        {(previewUrl || value) && (
           <Button type="button" variant="outline" size="sm" onClick={clearImage}>
             <X className="h-4 w-4" />
           </Button>
@@ -115,12 +158,12 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
       </div>
 
       {/* Preview */}
-      {value && (
+      {previewUrl && (
         <div className="mt-4">
           <Label className="text-sm text-gray-600">Prévia:</Label>
           <div className="mt-2 relative inline-block">
             <img
-              src={value}
+              src={previewUrl}
               alt="Preview"
               className="max-w-64 max-h-48 object-cover rounded-lg border"
               onError={() => {
@@ -131,6 +174,11 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
                 });
               }}
             />
+            {previewUrl.startsWith('blob:') && (
+              <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded">
+                Preview local
+              </div>
+            )}
           </div>
         </div>
       )}
