@@ -38,19 +38,13 @@ const TagsInput: React.FC<TagsInputProps> = ({
       onChange([...value, tag]);
       setInputValue('');
     }
-    // Force focus back to input
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
+    // Removido o requestAnimationFrame que forçava o foco
   };
 
   const removeTag = (index: number) => {
     const newTags = value.filter((_, i) => i !== index);
     onChange(newTags);
-    // Force focus back to input
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
+    // Removido o requestAnimationFrame que forçava o foco
   };
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -59,6 +53,7 @@ const TagsInput: React.FC<TagsInputProps> = ({
     if (!relatedTarget || !relatedTarget.closest('[data-tag-remove]')) {
       addTag();
     }
+    // Permitir que o foco seja transferido normalmente
   };
 
   return (

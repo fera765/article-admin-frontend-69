@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Button } from '@/components/ui/button';
@@ -62,14 +63,14 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
             description: 'A imagem foi enviada com sucesso.',
           });
         } else {
-          // If upload fails, remove blob URL
+          // If upload fails, clean up blob URL
           URL.revokeObjectURL(blobUrl);
           setPreviewUrl('');
           throw new Error('Falha no upload');
         }
       } catch (error) {
         console.error('Error uploading image:', error);
-        // If upload fails, remove blob URL
+        // If upload fails, clean up blob URL
         URL.revokeObjectURL(blobUrl);
         setPreviewUrl('');
         toast({
@@ -93,9 +94,16 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
 
   const handleUrlChange = (url: string) => {
     setUrlInput(url);
-    setPreviewUrl(url);
-    setServerUrl(url);
-    onChange(url);
+    // For manual URL input, use the URL directly for both preview and server
+    if (url) {
+      setPreviewUrl(url);
+      setServerUrl(url);
+      onChange(url);
+    } else {
+      setPreviewUrl('');
+      setServerUrl('');
+      onChange('');
+    }
   };
 
   const clearImage = () => {
@@ -157,7 +165,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
         <p className="text-xs text-gray-400 mt-1">PNG, JPG, GIF até 10MB</p>
       </div>
 
-      {/* Preview */}
+      {/* Preview - sempre mostra se tiver previewUrl */}
       {previewUrl && (
         <div className="mt-4">
           <Label className="text-sm text-gray-600">Prévia:</Label>
@@ -166,7 +174,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
               src={previewUrl}
               alt="Preview"
               className="max-w-64 max-h-48 object-cover rounded-lg border"
-              onError={() => {
+              onLoad={() => console.log('Image loaded successfully:', previewUrl)}
+              onError={(e) => {
+                console.error('Error loading image:', previewUrl);
                 toast({
                   title: 'Erro ao carregar imagem',
                   description: 'Verifique se a URL está correta.',

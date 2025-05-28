@@ -72,16 +72,18 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           // Create blob URL for immediate preview
           const blobUrl = URL.createObjectURL(file);
           
-          // Insert image with blob URL immediately
+          // Insert image with blob URL immediately for instant preview
           executeCommand('insertImage', blobUrl);
           
+          console.log('Image inserted with blob URL for preview:', blobUrl);
+          
           // Show loading toast
-          const loadingToast = toast({
+          toast({
             title: 'Enviando imagem...',
             description: 'Por favor, aguarde.',
           });
 
-          // Upload to server
+          // Upload to server in background
           const formData = new FormData();
           formData.append('image', file);
 
@@ -97,8 +99,10 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
             const data = await response.json();
             const serverUrl = `${apiClient.baseURL}${data.url}`;
             
-            // Store mapping for later replacement
+            // Store mapping for replacement when saving
             setUploadedImages(prev => new Map(prev.set(blobUrl, serverUrl)));
+            
+            console.log('Image uploaded successfully. Blob:', blobUrl, 'Server:', serverUrl);
             
             toast({
               title: 'Imagem enviada com sucesso!',
