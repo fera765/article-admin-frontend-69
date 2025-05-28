@@ -53,6 +53,55 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     handleInput();
   };
 
+  const insertImageAtCursor = (imageUrl: string) => {
+    if (editorRef.current) {
+      // Focus the editor first
+      editorRef.current.focus();
+      
+      // Get current selection
+      const selection = window.getSelection();
+      const range = selection?.getRangeAt(0);
+      
+      if (range) {
+        // Create image element
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
+        img.style.margin = '8px 0';
+        img.style.borderRadius = '4px';
+        img.style.display = 'block';
+        
+        // Insert image at cursor position
+        range.deleteContents();
+        range.insertNode(img);
+        
+        // Move cursor after image
+        range.setStartAfter(img);
+        range.setEndAfter(img);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        
+        console.log('Image inserted at cursor:', imageUrl);
+      } else {
+        // Fallback: append to end
+        editorRef.current.appendChild(document.createElement('br'));
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
+        img.style.margin = '8px 0';
+        img.style.borderRadius = '4px';
+        img.style.display = 'block';
+        editorRef.current.appendChild(img);
+        
+        console.log('Image appended to editor:', imageUrl);
+      }
+      
+      handleInput();
+    }
+  };
+
   const handleImageUpload = async () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -68,7 +117,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           console.log('Inserting image with blob URL:', blobUrl);
           
           // Insert image with blob URL immediately for instant preview
-          executeCommand('insertImage', blobUrl);
+          insertImageAtCursor(blobUrl);
           
           // Show loading toast
           toast({
@@ -90,7 +139,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
           if (response.ok) {
             const data = await response.json();
-            const serverUrl = data.url; // Use the complete URL returned by API
+            const serverUrl = data.url;
             
             console.log('Upload successful, replacing blob URL with server URL:', serverUrl);
             

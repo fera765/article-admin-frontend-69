@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Upload, X } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Upload, X, Link } from 'lucide-react';
 import { apiClient } from '@/utils/api';
 import { toast } from '@/hooks/use-toast';
 
@@ -16,14 +16,17 @@ interface ImageUploadProps {
 
 const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Imagem" }) => {
   const [uploading, setUploading] = useState(false);
-  const [urlInput, setUrlInput] = useState(value);
-  const [previewUrl, setPreviewUrl] = useState<string>(value);
+  const [urlInput, setUrlInput] = useState('');
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [localImageFile, setLocalImageFile] = useState<File | null>(null);
+  const [activeTab, setActiveTab] = useState<'url' | 'upload'>('url');
 
-  // Initialize preview with existing value
+  // Initialize with existing value
   useEffect(() => {
     if (value) {
       setPreviewUrl(value);
       setUrlInput(value);
+      setActiveTab('url');
     }
   }, [value]);
 
@@ -33,8 +36,12 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
       // Create blob URL for immediate preview
       const blobUrl = URL.createObjectURL(file);
       setPreviewUrl(blobUrl);
+      setLocalImageFile(file);
       
       console.log('Created blob URL for preview:', blobUrl);
+      
+      // Update form with blob URL immediately for local preview
+      onChange(blobUrl);
       
       setUploading(true);
       try {
@@ -51,33 +58,31 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
 
         if (response.ok) {
           const data = await response.json();
-          const serverUrl = data.url; // Use the complete URL returned by API
+          const serverUrl = data.url;
           
           console.log('Upload successful, server URL:', serverUrl);
           
-          // Update with server URL
-          setUrlInput(serverUrl);
-          setPreviewUrl(serverUrl);
+          // Store server URL for form submission, but keep blob URL for preview
           onChange(serverUrl);
-          
-          // Clean up blob URL
-          URL.revokeObjectURL(blobUrl);
           
           toast({
             title: 'Upload concluído!',
             description: 'A imagem foi enviada com sucesso.',
           });
         } else {
-          // If upload fails, clean up blob URL
+          // If upload fails, revert
           URL.revokeObjectURL(blobUrl);
-          setPreviewUrl(value); // Revert to original value
+          setPreviewUrl('');
+          setLocalImageFile(null);
+          onChange('');
           throw new Error('Falha no upload');
         }
       } catch (error) {
         console.error('Error uploading image:', error);
-        // If upload fails, clean up blob URL and revert
         URL.revokeObjectURL(blobUrl);
-        setPreviewUrl(value);
+        setPreviewUrl('');
+        setLocalImageFile(null);
+        onChange('');
         toast({
           title: 'Erro no upload',
           description: 'Tente novamente.',
@@ -101,6 +106,11 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
     setUrlInput(url);
     setPreviewUrl(url);
     onChange(url);
+    // Clear any local file when using URL
+    if (localImageFile) {
+      URL.revokeObjectURL(previewUrl);
+      setLocalImageFile(null);
+    }
   };
 
   const clearImage = () => {
@@ -112,6 +122,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
     onChange('');
     setUrlInput('');
     setPreviewUrl('');
+    setLocalImageFile(null);
   };
 
   // Cleanup blob URLs on unmount
@@ -127,39 +138,63 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
     <div className="space-y-4">
       <Label>{label}</Label>
       
-      {/* URL Input */}
-      <div className="flex gap-2">
-        <Input
-          placeholder="https://exemplo.com/imagem.jpg"
-          value={urlInput}
-          onChange={(e) => handleUrlChange(e.target.value)}
-        />
-        {(previewUrl || value) && (
-          <Button type="button" variant="outline" size="sm" onClick={clearImage}>
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-
-      {/* Dropzone */}
-      <div
-        {...getRootProps()}
-        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-          isDragActive ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-red-400'
-        }`}
-      >
-        <input {...getInputProps()} />
-        <Upload className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-        <p className="text-sm text-gray-600">
-          {uploading
-            ? 'Enviando...'
-            : isDragActive
-            ? 'Solte a imagem aqui'
-            : 'Arraste uma imagem ou clique para selecionar'
-          }
-        </p>
-        <p className="text-xs text-gray-400 mt-1">PNG, JPG, GIF até 10MB</p>
-      </div>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'url' | 'upload')}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="url" className="flex items-center gap-2">
+            <Link className="h-4 w-4" />
+            URL da Imagem
+          </TabsTrigger>
+          <TabsTrigger value="upload" className="flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            Fazer Upload
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="url" className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="https://exemplo.com/imagem.jpg"
+              value={urlInput}
+              onChange={(e) => handleUrlChange(e.target.value)}
+            />
+            {previewUrl && (
+              <Button type="button" variant="outline" size="sm" onClick={clearImage}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="upload" className="space-y-4">
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+              isDragActive ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-red-400'
+            }`}
+          >
+            <input {...getInputProps()} />
+            <Upload className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+            <p className="text-sm text-gray-600">
+              {uploading
+                ? 'Enviando...'
+                : isDragActive
+                ? 'Solte a imagem aqui'
+                : 'Arraste uma imagem ou clique para selecionar'
+              }
+            </p>
+            <p className="text-xs text-gray-400 mt-1">PNG, JPG, GIF até 10MB</p>
+          </div>
+          
+          {previewUrl && (
+            <div className="flex justify-center">
+              <Button type="button" variant="outline" size="sm" onClick={clearImage}>
+                <X className="h-4 w-4 mr-2" />
+                Remover Imagem
+              </Button>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Preview */}
       {previewUrl && (
@@ -180,7 +215,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
                 });
               }}
             />
-            {previewUrl.startsWith('blob:') && (
+            {uploading && (
               <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded">
                 Carregando...
               </div>
