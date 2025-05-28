@@ -17,14 +17,12 @@ interface ImageUploadProps {
 const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Imagem" }) => {
   const [uploading, setUploading] = useState(false);
   const [urlInput, setUrlInput] = useState(value);
-  const [previewUrl, setPreviewUrl] = useState<string>('');
-  const [serverUrl, setServerUrl] = useState<string>('');
+  const [previewUrl, setPreviewUrl] = useState<string>(value);
 
   // Initialize preview with existing value
   useEffect(() => {
     if (value) {
       setPreviewUrl(value);
-      setServerUrl(value);
       setUrlInput(value);
     }
   }, [value]);
@@ -35,6 +33,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
       // Create blob URL for immediate preview
       const blobUrl = URL.createObjectURL(file);
       setPreviewUrl(blobUrl);
+      
+      console.log('Created blob URL for preview:', blobUrl);
       
       setUploading(true);
       try {
@@ -51,12 +51,17 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
 
         if (response.ok) {
           const data = await response.json();
-          const fullServerUrl = `${apiClient.baseURL}${data.url}`;
+          const serverUrl = data.url; // Use the complete URL returned by API
           
-          // Store server URL but keep blob URL for preview
-          setServerUrl(fullServerUrl);
-          setUrlInput(fullServerUrl);
-          onChange(fullServerUrl);
+          console.log('Upload successful, server URL:', serverUrl);
+          
+          // Update with server URL
+          setUrlInput(serverUrl);
+          setPreviewUrl(serverUrl);
+          onChange(serverUrl);
+          
+          // Clean up blob URL
+          URL.revokeObjectURL(blobUrl);
           
           toast({
             title: 'Upload concluído!',
@@ -65,14 +70,14 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
         } else {
           // If upload fails, clean up blob URL
           URL.revokeObjectURL(blobUrl);
-          setPreviewUrl('');
+          setPreviewUrl(value); // Revert to original value
           throw new Error('Falha no upload');
         }
       } catch (error) {
         console.error('Error uploading image:', error);
-        // If upload fails, clean up blob URL
+        // If upload fails, clean up blob URL and revert
         URL.revokeObjectURL(blobUrl);
-        setPreviewUrl('');
+        setPreviewUrl(value);
         toast({
           title: 'Erro no upload',
           description: 'Tente novamente.',
@@ -94,16 +99,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
 
   const handleUrlChange = (url: string) => {
     setUrlInput(url);
-    // For manual URL input, use the URL directly for both preview and server
-    if (url) {
-      setPreviewUrl(url);
-      setServerUrl(url);
-      onChange(url);
-    } else {
-      setPreviewUrl('');
-      setServerUrl('');
-      onChange('');
-    }
+    setPreviewUrl(url);
+    onChange(url);
   };
 
   const clearImage = () => {
@@ -115,7 +112,6 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
     onChange('');
     setUrlInput('');
     setPreviewUrl('');
-    setServerUrl('');
   };
 
   // Cleanup blob URLs on unmount
@@ -165,7 +161,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
         <p className="text-xs text-gray-400 mt-1">PNG, JPG, GIF até 10MB</p>
       </div>
 
-      {/* Preview - sempre mostra se tiver previewUrl */}
+      {/* Preview */}
       {previewUrl && (
         <div className="mt-4">
           <Label className="text-sm text-gray-600">Prévia:</Label>
@@ -176,7 +172,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
               className="max-w-64 max-h-48 object-cover rounded-lg border"
               onLoad={() => console.log('Image loaded successfully:', previewUrl)}
               onError={(e) => {
-                console.error('Error loading image:', previewUrl);
+                console.error('Error loading image:', previewUrl, e);
                 toast({
                   title: 'Erro ao carregar imagem',
                   description: 'Verifique se a URL está correta.',
@@ -185,8 +181,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ value, onChange, label = "Ima
               }}
             />
             {previewUrl.startsWith('blob:') && (
-              <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded">
-                Preview local
+              <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded">
+                Carregando...
               </div>
             )}
           </div>

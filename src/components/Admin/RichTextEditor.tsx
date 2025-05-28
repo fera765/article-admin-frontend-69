@@ -32,7 +32,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isFocused, setIsFocused] = useState(false);
-  const [uploadedImages, setUploadedImages] = useState<Map<string, string>>(new Map());
 
   // Sincronizar valor inicial
   useEffect(() => {
@@ -43,13 +42,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   const handleInput = () => {
     if (editorRef.current) {
-      let content = editorRef.current.innerHTML;
-      
-      // Replace blob URLs with server URLs for saving
-      uploadedImages.forEach((serverUrl, blobUrl) => {
-        content = content.replace(new RegExp(blobUrl, 'g'), serverUrl);
-      });
-      
+      const content = editorRef.current.innerHTML;
       onChange(content);
     }
   };
@@ -72,10 +65,10 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           // Create blob URL for immediate preview
           const blobUrl = URL.createObjectURL(file);
           
+          console.log('Inserting image with blob URL:', blobUrl);
+          
           // Insert image with blob URL immediately for instant preview
           executeCommand('insertImage', blobUrl);
-          
-          console.log('Image inserted with blob URL for preview:', blobUrl);
           
           // Show loading toast
           toast({
@@ -97,12 +90,20 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
           if (response.ok) {
             const data = await response.json();
-            const serverUrl = `${apiClient.baseURL}${data.url}`;
+            const serverUrl = data.url; // Use the complete URL returned by API
             
-            // Store mapping for replacement when saving
-            setUploadedImages(prev => new Map(prev.set(blobUrl, serverUrl)));
+            console.log('Upload successful, replacing blob URL with server URL:', serverUrl);
             
-            console.log('Image uploaded successfully. Blob:', blobUrl, 'Server:', serverUrl);
+            // Replace blob URL with server URL in editor content
+            if (editorRef.current) {
+              const content = editorRef.current.innerHTML;
+              const updatedContent = content.replace(blobUrl, serverUrl);
+              editorRef.current.innerHTML = updatedContent;
+              onChange(updatedContent);
+            }
+            
+            // Clean up blob URL
+            URL.revokeObjectURL(blobUrl);
             
             toast({
               title: 'Imagem enviada com sucesso!',
@@ -113,6 +114,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
             if (editorRef.current) {
               const images = editorRef.current.querySelectorAll(`img[src="${blobUrl}"]`);
               images.forEach(img => img.remove());
+              handleInput();
             }
             URL.revokeObjectURL(blobUrl);
             throw new Error('Falha no upload');
@@ -137,17 +139,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       executeCommand('createLink', url);
     }
   };
-
-  // Cleanup blob URLs on unmount
-  useEffect(() => {
-    return () => {
-      uploadedImages.forEach((_, blobUrl) => {
-        if (blobUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(blobUrl);
-        }
-      });
-    };
-  }, [uploadedImages]);
 
   return (
     <div className="space-y-2">
@@ -299,12 +290,12 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           height: auto;
           margin: 8px 0;
           border-radius: 4px;
-          position: relative;
+          display: block;
         }
         
         .rich-text-editor img[src^="blob:"] {
-          border: 2px solid #10b981;
-          box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.2);
+          border: 2px solid #3b82f6;
+          box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
         }
         
         .rich-text-editor ul, .rich-text-editor ol {
